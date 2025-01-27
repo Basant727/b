@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IIT Bombay Timetable</title>
+    <style>
+        /* Previous styles remain the same */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a; /* Fallback background color */
+            color: white;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            margin: 20px;
+        }
+
+        /* Previous styles continue... */
+    </style>
+</head>
+<body>
+    <!-- Previous HTML structure remains the same -->
+
+    <script>
+        let currentPage = "mainPage";
+        const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+        let currentDayIndex = 0; // Start with Monday by default
+        let timetable = JSON.parse(localStorage.getItem('timetable')) || {};
+        let currentPin = "";
+
+        // Update current day on load
+        function updateCurrentDay() {
+            const today = new Date().getDay();
+            currentDayIndex = today === 0 ? 6 : today - 1;
+        }
+
+        function goToViewPage() {
+            document.getElementById('viewPin').value = '';
+            showPage("viewPage");
+        }
+
+        function goToCreatePage() {
+            document.getElementById('timetableName').value = '';
+            showPage("createPage");
+        }
+
+        function viewTimetable() {
+            const pin = document.getElementById("viewPin").value;
+            if (!pin) {
+                alert("Please enter a PIN!");
+                return;
+            }
+            if (timetable[pin]) {
+                currentPin = pin;
+                updateCurrentDay(); // Set to current day when viewing
+                updateTimetableContent(pin);
+                showPage("timetablePage");
+            } else {
+                alert("Invalid PIN or no timetable exists!");
+            }
+        }
+
+        function updateTimetableContent(pin) {
+            const timetableData = timetable[pin];
+            if (!timetableData) return;
+
+            document.getElementById("dayHeading").innerText = `${days[currentDayIndex]}'s Timetable`;
+            const dayTimetable = timetableData[days[currentDayIndex]] || "";
+            const formattedContent = dayTimetable
+                .split("\n")
+                .map(entry => {
+                    const [time, ...activityParts] = entry.split(":");
+                    const activity = activityParts.join(":"); // Handle colons in activity description
+                    if (time && activity) {
+                        return `<div class="slot">${formatTime(time.trim())} - ${activity.trim()}</div>`;
+                    }
+                    return "";
+                })
+                .filter(entry => entry.trim() !== "")
+                .join("");
+
+            document.getElementById("timetableContent").innerHTML = formattedContent || "No entries for today.";
+        }
+
+        function formatTime(timeRange) {
+            const [start, end] = timeRange.split("-").map(t => t.trim());
+            if (!start || !end) return timeRange; // Return original if format is invalid
+            return `${convertTo12Hour(start)} to ${convertTo12Hour(end)}`;
+        }
+
+        function convertTo12Hour(time) {
+            try {
+                let [hours, minutes] = time.split(":").map(Number);
+                if (isNaN(hours) || isNaN(minutes)) return time; // Return original if parsing fails
+                
+                const period = hours >= 12 ? "PM" : "AM";
+                hours = hours % 12 || 12;
+                return `${hours}:${minutes.toString().padStart(2, "0")} ${period}`;
+            } catch (e) {
+                return time; // Return original if any error occurs
+            }
+        }
+
+        function setTimetableName() {
+            const name = document.getElementById("timetableName").value.trim();
+            if (name === "") {
+                alert("Please enter a name for your timetable.");
+                return;
+            }
+            
+            const pin = prompt("Set a 4-digit PIN for this timetable:");
+            if (!pin || pin.length !== 4 || isNaN(pin)) {
+                alert("Invalid PIN. Please enter a 4-digit number.");
+                return;
+            }
+            
+            if (timetable[pin]) {
+                if (!confirm("A timetable with this PIN already exists. Do you want to overwrite it?")) {
+                    return;
+                }
+            }
+            
+            timetable[pin] = {
+                name,
+                Monday: "", Tuesday: "", Wednesday: "", Thursday: "", Friday: "", Saturday: "", Sunday: ""
+            };
+            currentPin = pin;
+            localStorage.setItem('timetable', JSON.stringify(timetable));
+            currentDayIndex = 0; // Start with Monday
+            showPage("addSlotsPage");
+            updateSlotHeading();
+            resetSlots(); // Reset slots when creating new timetable
+        }
+
+        function resetSlots() {
+            const container = document.getElementById("slots");
+            container.innerHTML = `
+                <div class="slot">
+                    <input type="text" value="8:30 - 9:30" readonly>
+                    <input type="text" placeholder="Enter activity">
+                </div>
+                <div class="slot">
+                    <input type="text" value="9:30 - 10:30" readonly>
+                    <input type="text" placeholder="Enter activity">
+                </div>
+                <div class="slot">
+                    <input type="text" value="10:30 - 11:30" readonly>
+                    <input type="text" placeholder="Enter activity">
+                </div>
+                <div class="slot">
+                    <input type="text" value="11:30 - 12:30" readonly>
+                    <input type="text" placeholder="Enter activity">
+                </div>
+                <div class="slot">
+                    <input type="text" value="12:30 - 2:00" readonly>
+                    <input type="text" value="Lunch">
+                </div>
+                <div class="slot">
+                    <input type="text" value="2:00 - 5:00" readonly>
+                    <input type="text" placeholder="Enter activity">
+                </div>
+            `;
+        }
+
+        function saveTimetable() {
+            const slots = document.querySelectorAll("#slots .slot");
+            const dayTimetable = Array.from(slots)
+                .map(slot => {
+                    const time = slot.children[0].value || slot.children[0].placeholder;
+                    const activity = slot.children[1].value || slot.children[1].placeholder;
+                    return time && activity ? `${time}: ${activity}` : "";
+                })
+                .filter(entry => entry.trim() !== "")
+                .join("\n");
+
+            if (!currentPin || !timetable[currentPin]) {
+                alert("Error: No active timetable found!");
+                return;
+            }
+
+            timetable[currentPin][days[currentDayIndex]] = dayTimetable;
+            localStorage.setItem('timetable', JSON.stringify(timetable));
+            alert("Timetable saved successfully!");
+            
+            if (currentDayIndex === 6) { // If it's Sunday
+                showPage("mainPage");
+            } else {
+                currentDayIndex++;
+                updateSlotHeading();
+                resetSlots();
+            }
+        }
+
+        // Initialize the application
+        window.onload = function() {
+            updateCurrentDay();
+            // Restore timetable data from localStorage
+            const savedTimetable = localStorage.getItem('timetable');
+            if (savedTimetable) {
+                timetable = JSON.parse(savedTimetable);
+            }
+        };
+
+        // Previous navigation functions remain the same...
+    </script>
+</body>
+</html>
